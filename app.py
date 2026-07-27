@@ -48,4 +48,67 @@ if uploaded_file:
 
     col3.metric(
         "Highest Expense",
-        f"₹{summary['Highest Expense
+        f"₹{summary['Highest Expense']:,.2f}",
+    )
+
+    col4.metric(
+        "Transactions",
+        summary["Transactions"],
+    )
+
+    st.divider()
+
+    st.subheader("Search Expenses")
+
+    keyword = st.text_input(
+        "Search by category or description"
+    )
+
+    filtered = search_expenses(df, keyword)
+
+    st.dataframe(filtered, use_container_width=True)
+
+    st.divider()
+
+    st.subheader("Expense by Category")
+
+    category = category_summary(filtered)
+
+    pie = px.pie(
+        category,
+        names="Category",
+        values="Amount",
+        hole=0.4,
+    )
+
+    st.plotly_chart(
+        pie,
+        use_container_width=True,
+    )
+
+    st.subheader("Monthly Expenses")
+
+    monthly = monthly_summary(filtered)
+
+    bar = px.bar(
+        monthly,
+        x="Month",
+        y="Amount",
+    )
+
+    st.plotly_chart(
+        bar,
+        use_container_width=True,
+    )
+
+    st.subheader("Download Filtered Data")
+
+    st.download_button(
+        "Download CSV",
+        filtered.to_csv(index=False),
+        file_name="filtered_expenses.csv",
+        mime="text/csv",
+    )
+
+else:
+    st.info("Upload a CSV file to begin.")
