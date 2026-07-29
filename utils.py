@@ -1,59 +1,260 @@
 import pandas as pd
+import numpy as np
+
+REQUIRED_COLUMNS = [
+    "Date",
+    "Amount",
+    "Category",
+    "Description",
+]
 
 
 def load_data(uploaded_file):
-    """Load expense data from a CSV file."""
-    return pd.read_csv(uploaded_file, parse_dates=["Date"])
+    """
+    Safely load and validate expense data.
+    """
+
+    if uploaded_file is None:
+        raise ValueError(
+            "No CSV file uploaded."
+        )
+
+    try:
+
+        df = pd.read_csv(uploaded_file)
+
+    except Exception as e:
+
+        raise ValueError(
+            f"Unable to read CSV: {e}"
+        )
+
+    if df.empty:
+
+        raise ValueError(
+            "Uploaded CSV is empty."
+        )
+
+    missing = [
+        col
+        for col in REQUIRED_COLUMNS
+        if col not in df.columns
+    ]
+
+    if missing:
+
+        raise ValueError(
+            "Missing required columns: "
+            + ", ".join(missing)
+        )
+
+    df = df.copy()
+
+    df["Date"] = pd.to_datetime(
+        df["Date"],
+        errors="coerce",
+    )
+
+    df["Amount"] = pd.to_numeric(
+        df["Amount"],
+        errors="coerce",
+    )
+
+    df["Category"] = (
+        df["Category"]
+        .fillna("Unknown")
+        .astype(str)
+        .str.strip()
+    )
+
+    df["Description"] = (
+        df["Description"]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+    )
+
+    df = df.dropna(
+        subset=[
+            "Date",
+            "Amount",
+        ]
+    )
+
+    df["Amount"] = df["Amount"].clip(
+        lower=0
+    )
+
+    df = df.reset_index(
+        drop=True
+    )
+
+    return df
 
 
 def calculate_summary(df):
-    """Calculate total expenses and transaction statistics."""
+    """
+    Safely calculate dashboard summary.
+    """
 
-    total_expense = df["Amount"].sum()
-    average_expense = df["Amount"].mean()
-    highest_expense = df["Amount"].max()
-    transaction_count = len(df)
+    if df.empty:
+
+        return {
+            "Total Expense": 0.0,
+            "Average Expense": 0.0,
+            "Highest Expense": 0.0,
+            "Transactions": 0,
+        }
 
     return {
-        "Total Expense": total_expense,
-        "Average Expense": average_expense,
-        "Highest Expense": highest_expense,
-        "Transactions": transaction_count,
+
+        "Total Expense":
+            float(df["Amount"].sum()),
+
+        "Average Expense":
+            float(df["Amount"].mean()),
+
+        "Highest Expense":
+            float(df["Amount"].max()),
+
+        "Transactions":
+            int(len(df)),
     }
 
 
 def category_summary(df):
-    """Summarize expenses by category."""
+    """
+    Expense totals by category.
+    """
+
+    if df.empty:
+
+        return pd.DataFrame(
+            columns=[
+                "Category",
+                "Amount",
+            ]
+        )
 
     return (
-        df.groupby("Category")["Amount"]
+
+        df.groupby(
+            "Category",
+            dropna=False,
+        )["Amount"]
+
         .sum()
-        .sort_values(ascending=False)
+
+        .sort_values(
+            ascending=False
+        )
+
         .reset_index()
+
     )
 
 
 def monthly_summary(df):
-    """Summarize expenses by month."""
+    """
+    Monthly expense totals.
+    """
 
-    df["Month"] = df["Date"].dt.to_period("M").astype(str)
+    if df.empty:
+
+        return pd.DataFrame(
+            columns=[
+                "Month",
+                "Amount",
+            ]
+        )
+
+    temp = df.copy()
+
+    temp["Month"] = (
+
+        temp["Date"]
+
+        .dt.to_period("M")
+
+        .astype(str)
+
+    )
 
     return (
-        df.groupby("Month")["Amount"]
+
+        temp.groupby(
+            "Month",
+            as_index=False,
+        )["Amount"]
+
         .sum()
-        .reset_index()
+
+        .sort_values(
+            "Month"
+        )
+
     )
 
 
 def search_expenses(df, keyword):
-    """Filter expenses by category or description."""
+    """
+    Safe category/description search.
+    """
 
-    if not keyword:
+    if df.empty:
+
+        return df
+
+    if keyword is None:
+
+        return df
+
+    keyword = str(keyword).strip()
+
+    if keyword == "":
+
         return df
 
     keyword = keyword.lower()
 
+    category = (
+
+        df["Category"]
+
+        .fillna("")
+
+        .astype(str)
+
+        .str.lower()
+
+    )
+
+    description = (
+
+        df["Description"]
+
+        .fillna("")
+
+        .astype(str)
+
+        .str.lower()
+
+    )
+
     return df[
-        df["Category"].astype(str).str.lower().str.contains(keyword)
-        | df["Description"].astype(str).str.lower().str.contains(keyword)
+
+        category.str.contains(
+            keyword,
+            regex=False,
+            na=False,
+        )
+
+        |
+
+        description.str.contains(
+            keyword,
+            regex=False,
+            na=False,
+        )
+
     ]
